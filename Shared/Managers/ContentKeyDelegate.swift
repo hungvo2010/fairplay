@@ -9,6 +9,28 @@
 
 import AVFoundation
 
+struct JettyResponse: Decodable {
+    let data: CData
+}
+struct CData: Decodable {
+    let item: Item
+}
+struct Item: Decodable {
+    let ckc: String
+}
+struct Custom: Decodable {
+    let fpsResponse: FpsResponse
+    init (json: [String:Any]){
+        fpsResponse = json["fairplay-streaming-response"] as? FpsResponse ?? FpsResponse(json: [String: String]())
+    }
+}
+struct FpsResponse: Decodable {
+    let keys: String
+    init (json: [String:String]) {
+        keys = json["streaming-keys"] as? String ?? ""
+    }
+}
+
 class ContentKeyDelegate: NSObject, AVContentKeySessionDelegate {
     
     // MARK: Types
@@ -23,8 +45,8 @@ class ContentKeyDelegate: NSObject, AVContentKeySessionDelegate {
     /// The directory that is used to save persistable content keys.
     lazy var contentKeyDirectory: URL = {
         guard let documentPath =
-            NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first else {
-                fatalError("Unable to determine library URL")
+                NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first else {
+            fatalError("Unable to determine library URL")
         }
         
         let documentURL = URL(fileURLWithPath: documentPath)
@@ -34,8 +56,8 @@ class ContentKeyDelegate: NSObject, AVContentKeySessionDelegate {
         if !FileManager.default.fileExists(atPath: contentKeyDirectory.path, isDirectory: nil) {
             do {
                 try FileManager.default.createDirectory(at: contentKeyDirectory,
-                                                    withIntermediateDirectories: false,
-                                                    attributes: nil)
+                                                        withIntermediateDirectories: false,
+                                                        attributes: nil)
             } catch {
                 fatalError("Unable to create directory for content keys at path: \(contentKeyDirectory.path)")
             }
@@ -49,21 +71,19 @@ class ContentKeyDelegate: NSObject, AVContentKeySessionDelegate {
     
     /// A dictionary mapping content key identifiers to their associated stream name.
     var contentKeyToStreamNameMap = [String: String]()
-
-    static HttpClient client = new HttpClient();
     
     func requestApplicationCertificate() throws -> Data {
         
         // MARK: ADAPT - You must implement this method to retrieve your FPS application certificate.
-        let applicationCertificate: Data? = nil
+        var applicationCertificate: Data? = nil
         let fpsCertificateUrl = "http://10.30.80.32:10523/resources/FPSHLS/live_certificate.cer";
-
+        
         do {
             applicationCertificate = try Data(contentsOf: URL(string: fpsCertificateUrl)!)
         } catch {
             print("Error loading FairPlay application certificate: \(error)")
         }
-
+        
         guard applicationCertificate != nil else {
             throw ProgramError.missingApplicationCertificate
         }
@@ -71,44 +91,96 @@ class ContentKeyDelegate: NSObject, AVContentKeySessionDelegate {
         return applicationCertificate!
     }
     
+    func stringify(json: Any, prettyPrinted: Bool = false) -> String {
+        var options: JSONSerialization.WritingOptions = []
+        if prettyPrinted {
+            options = JSONSerialization.WritingOptions.prettyPrinted
+        }
+        
+        do {
+            let data = try JSONSerialization.data(withJSONObject: json, options: options)
+            if let string = String(data: data, encoding: String.Encoding.utf8) {
+                return string
+            }
+        } catch {
+            print(error)
+        }
+        
+        return ""
+    }
+    
+    func queryItems(dictionary: [String:Any]) -> String {
+        var components = URLComponents()
+        print(components.url!)
+        components.queryItems = dictionary.map {
+            URLQueryItem(name: $0, value: String(describing: $1))
+        }
+        return (components.url?.absoluteString)!
+    }
+    
     func requestContentKeyFromKeySecurityModule(spcData: Data, assetID: String) throws -> Data {
         
         // MARK: ADAPT - You must implement this method to request a CKC from your KSM.
+        print("here")
         
-        let ckcData: Data? = nil
-
-        try {
-            let session = URLSession(configuration: .default)
-            var postRequest = URLRequest(url: URL(string: "http://10.30.80.32:10890/v1.0/drmapi/get-key")!)
-            postRequest.httpMethod = "POST"
-            postRequest.addValue("application/x-www-form-urlencoded; charset=UTF-8", forHTTPHeaderField: "Content-Type")
-            postRequest.httpBody = String(format: "{\"fairplay-streaming-request\": 
-                {\"version\": \"%@\",
-                \"streaming-keys\": {\"id\": \"%@\", 
-                                    \"uri\": \"%@\", 
-                                    \"spc\": \"%@\", 
-                                    }}}", 1, 1, assetId, spcData.base64EncodedString()).data(using: .utf8)
-            
-            
-            dataTask = session.dataTask(with: postRequest) { (data, response, error) in
-                do {
-                    let json = try JSONDecoder().decode([String: Dictionary<String, String>].self, from: data!)
-                    let ckc = json["data"]["item"]["fairplay-streaming-response"]["streaming-keys"]!
-                    ckcData = Data(base64Encoded: ckc)
-                    
-                    print("requestContentKeyFromKeySecurityModule:", ckcData)
-
-                } catch {
-                }
+        var ckcData: Data? = nil
+        
+        let session = URLSession(configuration: URLSessionConfiguration.default)
+        var postRequest = URLRequest(url: URL(string: "http://10.30.80.32:10890/v1.0/drmapi/key")!)
+        let jsonBody: [String: Any] = [
+            "version": 1,
+            "streaming-keys":
+                ["id": 1,
+                 "uri": assetID,
+                 "spc": spcData.base64EncodedString()
+                ]
+        ]
+        //         let jsonData = jsonBody.addingPercentEncoding(withAllowedCharacters: <#T##Foundation.CharacterSet#>);
+        
+        //            let jsonData = try? JSONSerialization.data(
+        //                withJSONObject: jsonBody,
+        //                options: []
+        //            )
+        //            print(jsonData)
+        // print(spcData.base64EncodedString())
+        var requestBodyComponents = URLComponents()
+        requestBodyComponents.queryItems = [URLQueryItem(name: "spc", value: spcData.base64EncodedString().replacingOccurrences(of: "+", with: "%2B"))]
+        //            requestBodyComponents.queryItems = [URLQueryItem(name: "fairplay-streaming-request", value: stringify(json: jsonBody))]
+        //            let bodyData = ["fairplay-streaming-request": jsonData]
+        postRequest.httpMethod = "POST"
+        postRequest.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        //            postRequest.httpBody = String(format: """{\"fairplay-streaming-request\":
+        //                {\"version\": \"%@\",
+        //                \"streaming-keys\": {\"id\": \"%@\",
+        //                                    \"uri\": \"%@\",m,
+        //                                    \"spc\": \"%@\",
+        //            }}}
+        //                                          """, 1, 1, assetId, spcData.base64EncodedString()).data(using: .utf8)
+        //
+        postRequest.httpBody = requestBodyComponents.query?.data(using: .utf8)
+//        print(postRequest.httpBody)
+        let sem = DispatchSemaphore.init(value: 0)
+        
+        var dataTask = session.dataTask(with: postRequest, completionHandler: {data, response, error in
+            defer {sem.signal()}
+            do {
+                print("response: ", String(decoding: data!, as: UTF8.self))
+                let ckc = try JSONDecoder().decode(JettyResponse.self, from: data!)
+                print("ckc: ", ckc)
+                //                    let ckc = json["data"]?["item"]?["fairplay-streaming-response"]["streaming-keys"]!
+                //                    let ckc = json["data"]?["item"]?["fairplay-streaming-response"]["streaming-keys"]!
+                ckcData = Data(base64Encoded: ckc.data.item.ckc)
+                
+                print("requestContentKeyFromKeySecurityModule:", ckcData)
+                
+            } catch {
             }
-
-            return ckcData!
-
-            dataTask.resume()
-        }
-        catch (Exception ex){
-            Debug.WriteLine(ex.Message);
-        }
+        })
+        dataTask.resume()
+        sem.wait()
+//        return ckcData!
+        
+        //            dataTask+.resume()
         
         guard ckcData != nil else {
             throw ProgramError.noCKCReturnedByKSM
@@ -116,7 +188,7 @@ class ContentKeyDelegate: NSObject, AVContentKeySessionDelegate {
         
         return ckcData!
     }
-
+    
     /// Preloads all the content keys associated with an Asset for persisting on disk.
     ///
     /// It is recommended you use AVContentKeySession to initiate the key loading process
@@ -223,38 +295,38 @@ class ContentKeyDelegate: NSObject, AVContentKeySessionDelegate {
     
     func handleStreamingContentKeyRequest(keyRequest: AVContentKeyRequest) {
         guard let contentKeyIdentifierString = keyRequest.identifier as? String,
-            let contentKeyIdentifierURL = URL(string: contentKeyIdentifierString),
-            let assetIDString = contentKeyIdentifierURL.host,
-            let assetIDData = assetIDString.data(using: .utf8)
-            else {
-                print("Failed to retrieve the assetID from the keyRequest!")
-                return
+              let contentKeyIdentifierURL = URL(string: contentKeyIdentifierString),
+              let assetIDString = contentKeyIdentifierURL.host,
+              let assetIDData = assetIDString.data(using: .utf8)
+        else {
+            print("Failed to retrieve the assetID from the keyRequest!")
+            return
         }
-
+        
         let provideOnlinekey: () -> Void = { () -> Void in
-
+            
             do {
                 let applicationCertificate = try self.requestApplicationCertificate()
-
+                
                 let completionHandler = { [weak self] (spcData: Data?, error: Error?) in
                     guard let strongSelf = self else { return }
                     if let error = error {
                         keyRequest.processContentKeyResponseError(error)
                         return
                     }
-
+                    
                     guard let spcData = spcData else { return }
-
+                    
                     do {
                         // Send SPC to Key Server and obtain CKC
                         let ckcData = try strongSelf.requestContentKeyFromKeySecurityModule(spcData: spcData, assetID: assetIDString)
-
+                        
                         /*
                          AVContentKeyResponse is used to represent the data returned from the key server when requesting a key for
                          decrypting content.
                          */
                         let keyResponse = AVContentKeyResponse(fairPlayStreamingKeyResponseData: ckcData)
-
+                        
                         /*
                          Provide the content key response to make protected content available for processing.
                          */
@@ -263,7 +335,7 @@ class ContentKeyDelegate: NSObject, AVContentKeySessionDelegate {
                         keyRequest.processContentKeyResponseError(error)
                     }
                 }
-
+                
                 keyRequest.makeStreamingContentKeyRequestData(forApp: applicationCertificate,
                                                               contentIdentifier: assetIDData,
                                                               options: [AVContentKeyRequestProtocolVersionsKey: [1]],
@@ -272,34 +344,34 @@ class ContentKeyDelegate: NSObject, AVContentKeySessionDelegate {
                 keyRequest.processContentKeyResponseError(error)
             }
         }
-
-        #if os(iOS)
-            /*
-             When you receive an AVContentKeyRequest via -contentKeySession:didProvideContentKeyRequest:
-             and you want the resulting key response to produce a key that can persist across multiple
-             playback sessions, you must invoke -respondByRequestingPersistableContentKeyRequest on that
-             AVContentKeyRequest in order to signal that you want to process an AVPersistableContentKeyRequest
-             instead. If the underlying protocol supports persistable content keys, in response your
-             delegate will receive an AVPersistableContentKeyRequest via -contentKeySession:didProvidePersistableContentKeyRequest:.
-             */
-            if shouldRequestPersistableContentKey(withIdentifier: assetIDString) ||
-                persistableContentKeyExistsOnDisk(withContentKeyIdentifier: assetIDString) {
+        
+#if os(iOS)
+        /*
+         When you receive an AVContentKeyRequest via -contentKeySession:didProvideContentKeyRequest:
+         and you want the resulting key response to produce a key that can persist across multiple
+         playback sessions, you must invoke -respondByRequestingPersistableContentKeyRequest on that
+         AVContentKeyRequest in order to signal that you want to process an AVPersistableContentKeyRequest
+         instead. If the underlying protocol supports persistable content keys, in response your
+         delegate will receive an AVPersistableContentKeyRequest via -contentKeySession:didProvidePersistableContentKeyRequest:.
+         */
+        if shouldRequestPersistableContentKey(withIdentifier: assetIDString) ||
+            persistableContentKeyExistsOnDisk(withContentKeyIdentifier: assetIDString) {
+            
+            // Request a Persistable Key Request.
+            do {
+                try keyRequest.respondByRequestingPersistableContentKeyRequestAndReturnError()
+            } catch {
                 
-                // Request a Persistable Key Request.
-                do {
-                    try keyRequest.respondByRequestingPersistableContentKeyRequestAndReturnError()
-                } catch {
-
-                    /*
-                    This case will occur when the client gets a key loading request from an AirPlay Session.
-                    You should answer the key request using an online key from your key server.
-                    */
-                    provideOnlinekey()
-                }
-                
-                return
+                /*
+                 This case will occur when the client gets a key loading request from an AirPlay Session.
+                 You should answer the key request using an online key from your key server.
+                 */
+                provideOnlinekey()
             }
-        #endif
+            
+            return
+        }
+#endif
         
         provideOnlinekey()
     }

@@ -24,9 +24,9 @@
 			<string>skd://asset-id</string>
 		</array>
 		<key>name</key>
-		<string>Add Entry for FPS Sample in Streams.plist</string>
+		<string>ICD </string>
 		<key>playlist_url</key>
-		<string>https://apple.com</string>
+		<string>http://10.30.80.32:10523/resources/FPSHLS/icd/stream.m3u8</string>
 		<key>is_protected</key>
 		<true/>
 	</dict>

@@ -248,7 +248,7 @@
 					};
 					428139ED1CE44B7300972264 = {
 						CreatedOnToolsVersion = 7.3.1;
-						DevelopmentTeam = Z7P62XVNWC;
+						DevelopmentTeam = CVB6BX97VM;
 						DevelopmentTeamName = "Apple Inc. - DTS Bilal Sayed Ahmad";
 						LastSwiftMigration = 0800;
 						LastSwiftUpdateCheck = 0800;
@@ -526,7 +526,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				DEVELOPMENT_TEAM = Z7P62XVNWC;
+				DEVELOPMENT_TEAM = CVB6BX97VM;
 				INFOPLIST_FILE = HLSCatalog/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 11.3;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -547,7 +547,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				DEVELOPMENT_TEAM = Z7P62XVNWC;
+				DEVELOPMENT_TEAM = CVB6BX97VM;
 				INFOPLIST_FILE = HLSCatalog/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 11.3;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
